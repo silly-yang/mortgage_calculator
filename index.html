@@ -555,16 +555,51 @@
                 const rowData = [];
                 cells.forEach(cell => {
                     let text = cell.innerText.replace(/,/g, '').replace(/\n/g, ' ').trim();
+                    // Wrap in quotes if contains special chars
+                    if (text.includes(',') || text.includes('"')) {
+                        text = '"' + text.replace(/"/g, '""') + '"';
+                    }
                     rowData.push(text);
                 });
                 csv += rowData.join(',') + '\n';
             });
-            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(blob);
-            link.download = `還款明細_${planName}.csv`;
-            link.click();
-            URL.revokeObjectURL(link.href);
+
+            const fileName = `還款明細_${planName}.csv`;
+
+            // Try Blob approach first (works on most Android + desktop)
+            try {
+                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                
+                // Check for iOS Safari - use different method
+                const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+                
+                if (navigator.share && isIOS) {
+                    // iOS: use Web Share API if available
+                    const file = new File([csv], fileName, { type: 'text/csv' });
+                    navigator.share({ files: [file], title: fileName }).catch(() => {
+                        // Fallback: open in new tab
+                        const reader = new FileReader();
+                        reader.onload = () => window.open(reader.result);
+                        reader.readAsDataURL(blob);
+                    });
+                } else {
+                    // Android / Desktop: standard download
+                    const link = document.createElement('a');
+                    link.href = URL.createObjectURL(blob);
+                    link.download = fileName;
+                    link.style.display = 'none';
+                    document.body.appendChild(link);
+                    link.click();
+                    setTimeout(() => {
+                        document.body.removeChild(link);
+                        URL.revokeObjectURL(link.href);
+                    }, 100);
+                }
+            } catch (e) {
+                // Final fallback: data URI
+                const encoded = encodeURIComponent(csv);
+                window.open('data:text/csv;charset=utf-8,' + encoded);
+            }
         }
     </script>
 </body>
