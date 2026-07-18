@@ -160,8 +160,12 @@
         }
         .monthly-table td:first-child { text-align: center; color: var(--text-muted); }
         .monthly-table tbody tr:hover { background: rgba(99, 102, 241, 0.08); }
-        .monthly-table tbody tr.year-start { border-top: 2px solid rgba(99, 102, 241, 0.25); }
-        .monthly-table tbody tr.year-start td:first-child { color: #a5b4fc; font-weight: 600; }
+        .monthly-table tbody tr.year-separator td {
+            background: rgba(99, 102, 241, 0.18); color: #a5b4fc !important;
+            font-weight: 700; font-size: 0.9rem; text-align: left !important;
+            padding: 0.6rem 0.8rem; border-top: 2px solid rgba(99, 102, 241, 0.4);
+            border-bottom: 1px solid rgba(99, 102, 241, 0.2); letter-spacing: 0.5px;
+        }
         .monthly-table .grace-row td { color: #94a3b8; }
         .monthly-table .interest-col { color: #f472b6 !important; }
         .monthly-table .accum-col { color: #fbbf24 !important; }
@@ -446,9 +450,14 @@
 
                 let tableRows = monthlyRows.map(row => {
                     const isYearStart = (row.month - 1) % 12 === 0;
-                    const yearLabel = isYearStart ? `Y${Math.ceil(row.month / 12)}` : '';
-                    return `<tr class="${isYearStart ? 'year-start' : ''} ${row.isGrace ? 'grace-row' : ''}">
-                        <td>${row.month} ${yearLabel ? '<br><small style="color:#818cf8">'+yearLabel+'</small>' : ''}</td>
+                    const yearNum = Math.ceil(row.month / 12);
+                    let yearRow = '';
+                    if (isYearStart) {
+                        const graceLabel = row.isGrace ? ' ─ 寬限期' : '';
+                        yearRow = `<tr class="year-separator"><td colspan="6">📅 第 ${yearNum} 年（第 ${row.month}~${Math.min(row.month + 11, monthlyRows.length)} 期）｜利率 ${row.rate}%${graceLabel}</td></tr>`;
+                    }
+                    return yearRow + `<tr class="${row.isGrace ? 'grace-row' : ''}">
+                        <td>${row.month}</td>
                         <td>${fmt(row.payment)}</td>
                         <td>${fmt(row.principal)}</td>
                         <td class="interest-col">${fmt(row.interest)}</td>
@@ -483,11 +492,16 @@
 
                     ${plan.conditions ? `<div class="plan-conditions"><strong>📋 申辦條件與備註：</strong> ${plan.conditions}</div>` : ''}
 
-                    <button class="toggle-table-btn" onclick="toggleTable('${tableId}', this)">
-                        📋 展開逐月還款明細 (共 ${useTerm * 12} 期)
-                    </button>
+                    <div style="display: flex; gap: 0.8rem; margin-top: 1rem; flex-wrap: wrap;">
+                        <button class="toggle-table-btn" onclick="toggleTable('${tableId}', this)">
+                            📋 收合逐月還款明細 (共 ${useTerm * 12} 期)
+                        </button>
+                        <button class="toggle-table-btn" onclick="downloadExcel('${tableId}', '${planNameDisplay.replace(/'/g, '')}')" style="background: rgba(16, 185, 129, 0.15); border-color: rgba(16, 185, 129, 0.3); color: #6ee7b7;">
+                            📥 下載 Excel
+                        </button>
+                    </div>
 
-                    <div id="${tableId}" class="monthly-table-wrapper" style="display: none;">
+                    <div id="${tableId}" class="monthly-table-wrapper">
                         <table class="monthly-table">
                             <thead>
                                 <tr>
@@ -525,11 +539,32 @@
             const table = document.getElementById(tableId);
             if (table.style.display === 'none') {
                 table.style.display = 'block';
-                btn.innerHTML = '📋 收合逐月還款明細';
+                btn.innerHTML = btn.innerHTML.replace('展開', '收合');
             } else {
                 table.style.display = 'none';
                 btn.innerHTML = btn.innerHTML.replace('收合', '展開');
             }
+        }
+
+        function downloadExcel(tableId, planName) {
+            const table = document.getElementById(tableId).querySelector('table');
+            const rows = table.querySelectorAll('tr');
+            let csv = '\uFEFF'; // BOM for Excel UTF-8
+            rows.forEach(row => {
+                const cells = row.querySelectorAll('th, td');
+                const rowData = [];
+                cells.forEach(cell => {
+                    let text = cell.innerText.replace(/,/g, '').replace(/\n/g, ' ').trim();
+                    rowData.push(text);
+                });
+                csv += rowData.join(',') + '\n';
+            });
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `還款明細_${planName}.csv`;
+            link.click();
+            URL.revokeObjectURL(link.href);
         }
     </script>
 </body>
